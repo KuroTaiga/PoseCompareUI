@@ -1,0 +1,20 @@
+# Core processing libraries
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Filtering and interpolation libraries
+filterpy>=1.4.5
+pykrige>=1.7.0
+
+# UI and visualization
+gradio
+matplotlib>=3.7.0
+
+# Optional utilities
+pandas>=2.0.0
+
+# Development tools (optional)
+pytest>=7.4.0  # for testing
+black>=23.0.0  # for code formatting
