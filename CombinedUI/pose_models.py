@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 from FDHumans.hmr2.models import load_hmr2, DEFAULT_CHECKPOINT
 from FDHumans.hmr2.utils import recursive_to
+from FDHumans.hmr2.utils.renderer import Renderer, cam_crop_to_full
 import subprocess
 import os
 # Configure logging
@@ -129,6 +130,7 @@ class VitPoseWrapper:
 class FourDHumanWrapper:
     """Wrapper for 4DHuman model."""
     def __init__(self, checkpoint_path=None, device=None):
+        self.LIGHT_BLUE=(0.65098039,  0.74117647,  0.85882353)
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.checkpoint_path = checkpoint_path or DEFAULT_CHECKPOINT
 
@@ -136,6 +138,7 @@ class FourDHumanWrapper:
             self.model, self.model_cfg = load_hmr2(self.checkpoint_path)
             self.model.to(self.device)
             self.model.eval()
+            self.render = Renderer(self.model_cfg, faces=self.model.smpl.faces)
             logging.info("4DHuman model initialized successfully.")
         except Exception as e:
             logging.error(f"Failed to initialize 4DHuman model: {e}", exc_info=True)
@@ -154,15 +157,7 @@ class FourDHumanWrapper:
     def process_frame(self, frame, show_background=True, noise_filter = 'None'):
         try:
             display_frame = frame.copy() if show_background else np.zeros(frame.shape, dtype=np.uint8)
-            match noise_filter:
-                case 'butterworth':
-                    display_frame = self._apply_butterworth(display_frame)
-                case 'chebyshev':
-                    display_frame = self._apply_chebyshev(display_frame)
-                case 'bessel':
-                    display_frame = self._apply_bessel(display_frame)
-                case 'None':
-                    pass
+            
             input_tensor = self.preprocess_frame(frame)
             
             if input_tensor is not None:
@@ -171,11 +166,20 @@ class FourDHumanWrapper:
                     batch = recursive_to(batch, self.device)
                     output = self.model(batch)
                     
+                    
                     vertices = output["pred_vertices"][0].cpu().numpy()
                     camera_params = output["pred_cam"][0].cpu().numpy()
                     
                     display_frame = self.render_mesh(display_frame, vertices, camera_params)
-            
+                    match noise_filter:
+                        case 'butterworth':
+                            display_frame = self._apply_butterworth(display_frame)
+                        case 'chebyshev':
+                            display_frame = self._apply_chebyshev(display_frame)
+                        case 'bessel':
+                            display_frame = self._apply_bessel(display_frame)
+                        case 'None':
+                            pass
             return display_frame
         except Exception as e:
             logging.error(f"Error processing frame with 4DHuman model: {e}", exc_info=True)
@@ -217,21 +221,45 @@ class FourDHumanWrapper:
             logging.error(f"Error applying butterworth filter for FDHuman model")
             return frame
     def render_mesh(self, frame, vertices, camera_params):
+        # frame_resized = cv2.resize(frame, (256, 256))
+        # s, tx, ty = camera_params
+        # img_h,img_w = frame.shape[:2]
+        # img_size = 1.0 * np.array([img_h, img_w])
+        # frame_rgb = cv2.cvtColor(frame_resized,cv2.COLOR_BGR2RGB)/255.0
+        # # scaled_focal_length = self.model_cfg.EXTRA.FOCAL_LENGTH / self.model_cfg.MODEL.IMAGE_SIZE * img_size.max()
+
+        # misc_args = dict(
+        #     mesh_base_color=self.LIGHT_BLUE,
+        #     scene_bg_color=(1, 1, 1),
+        #     # focal_length=scaled_focal_length,
+        # )
+        
+        # cam_view = self.render.render_rgba(vertices,**misc_args)
+        # # Overlay image
+
+        # input_frame_w_alpha = np.concatenate([frame_rgb, np.ones_like(frame_rgb[:,:,:1])], axis=2) # Add alpha channel
+        # output_frame = (
+        #     input_frame_w_alpha[:,:,:3]*(1-cam_view[:,:,3:])+cam_view[:,:,:3] * cam_view[:,:,3:]
+        # )
+        # output_frame_bgr = cv2.cvtColor((output_frame*255).astype(np.uint8),cv2.COLOR_RGB2BGR)
+        # return output_frame_bgr
         try:
             s, tx, ty = camera_params
             img_h, img_w = frame.shape[:2]
+            black_frame = np.zeros(frame.shape, dtype=np.uint8)
             
             projected_vertices = vertices[:, :2] * s + np.array([tx, ty])
             projected_vertices[:, 0] = (projected_vertices[:, 0] + 1) * img_w / 2.0
             projected_vertices[:, 1] = img_h-(1-projected_vertices[:, 1]) * img_h / 2.0
 
             for v in projected_vertices.astype(int):
-                cv2.circle(frame, tuple(v), 2, (0, 255, 0), -1)
+                cv2.circle(black_frame, tuple(v), 2, (0, 255, 0), -1)
             
-            return frame
+            return black_frame
         except Exception as e:
             logging.error(f"Error rendering mesh: {e}", exc_info=True)
-            return frame
+            return black_frame
+
         
     def process_video(self, video_path, output_path,show_background = True):
         try:
