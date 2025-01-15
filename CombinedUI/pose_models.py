@@ -3,6 +3,7 @@ import cv2
 import torch
 import numpy as np
 import mediapipe as mp
+from scipy import signal
 # from mmcv import Config
 # from mmpose.models import build_posenet
 # from mmcv.runner import load_checkpoint
@@ -150,9 +151,18 @@ class FourDHumanWrapper:
             logging.error(f"Error preprocessing frame: {e}", exc_info=True)
             return None
 
-    def process_frame(self, frame, show_background=True):
+    def process_frame(self, frame, show_background=True, noise_filter = 'None'):
         try:
             display_frame = frame.copy() if show_background else np.zeros(frame.shape, dtype=np.uint8)
+            match noise_filter:
+                case 'butterworth':
+                    display_frame = self._apply_butterworth(display_frame)
+                case 'chebyshev':
+                    display_frame = self._apply_chebyshev(display_frame)
+                case 'bessel':
+                    display_frame = self._apply_bessel(display_frame)
+                case 'None':
+                    pass
             input_tensor = self.preprocess_frame(frame)
             
             if input_tensor is not None:
@@ -170,7 +180,42 @@ class FourDHumanWrapper:
         except Exception as e:
             logging.error(f"Error processing frame with 4DHuman model: {e}", exc_info=True)
             return frame
-
+    def _apply_chebyshev(self,frame,order = 4,ripple_db = 1.0,cutoff = 0.1):
+        try:
+            b,a = signal.cheby1(order,ripple_db,cutoff,'low')
+            smoothed_frame = np.zeros_like(frame, dtype=np.float32)
+            for i in range(frame.shape[2]):  # Iterate over RGB channels
+                smoothed_frame[:, :, i] = signal.filtfilt(b, a, frame[:, :, i].astype(np.float32), axis=0)
+            # Clip values back to valid range for image data
+            smoothed_frame = np.clip(smoothed_frame, 0, 255).astype(np.uint8)
+            return smoothed_frame
+        except Exception as e:
+            logging.error(f"Error applying butterworth filter for FDHuman model")
+            return frame
+    def _apply_bessel(self,frame, order = 4, cutoff = 0.1):
+        try:
+            b,a = signal.bessel(order,cutoff,'low')
+            smoothed_frame = np.zeros_like(frame, dtype=np.float32)
+            for i in range(frame.shape[2]):  # Iterate over RGB channels
+                smoothed_frame[:, :, i] = signal.filtfilt(b, a, frame[:, :, i].astype(np.float32), axis=0)
+            # Clip values back to valid range for image data
+            smoothed_frame = np.clip(smoothed_frame, 0, 255).astype(np.uint8)
+            return smoothed_frame
+        except Exception as e:
+            logging.error(f"Error applying butterworth filter for FDHuman model")
+            return frame
+    def _apply_butterworth(self, frame, order = 4, cutoff = 0.1):
+        try:
+            b,a = signal.butter(order,cutoff,'low')
+            smoothed_frame = np.zeros_like(frame, dtype=np.float32)
+            for i in range(frame.shape[2]):  # Iterate over RGB channels
+                smoothed_frame[:, :, i] = signal.filtfilt(b, a, frame[:, :, i].astype(np.float32), axis=0)
+            # Clip values back to valid range for image data
+            smoothed_frame = np.clip(smoothed_frame, 0, 255).astype(np.uint8)
+            return smoothed_frame
+        except Exception as e:
+            logging.error(f"Error applying butterworth filter for FDHuman model")
+            return frame
     def render_mesh(self, frame, vertices, camera_params):
         try:
             s, tx, ty = camera_params

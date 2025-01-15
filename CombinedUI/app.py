@@ -31,7 +31,7 @@ def verify_output(path):
     logger.info(f"Verifying path {path}: {'exists' if exists else 'does not exist'}")
     return exists
 
-def process_video(video_path, selected_models):
+def process_video(video_path, selected_models, noise_filter = 'None'):
     try:
         output_paths = {}
         video_dir = os.path.dirname(video_path)
@@ -48,7 +48,7 @@ def process_video(video_path, selected_models):
                     logger.info(f"Expected output path: {output_path}")
                 case "fourdhumans":
                     output_path = f'./output_{model}.mp4'
-                    FDHuman_wrapper.process_video(video_path, output_path)
+                    FDHuman_wrapper.process_video(video_path, output_path,noise_filter)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
         return output_paths
@@ -98,11 +98,11 @@ def create_ui():
                 'mediapipe', 'fourdhumans'
             ]
             INTERPOLATION_METHODS = [
-                'no interpolation', 'kalman', 'butterworth', 'wiener',
+                'no interpolation', 'kalman', 'wiener',
                 'linear', 'bilinear', 'spline', 'kriging'
             ]
             NOISE_METHODS = [
-                'orignal','chebyshev','bessel'
+                'original','chebyshev','bessel','butterworth'
             ]
             # Input controls
             with gr.Row():
@@ -127,8 +127,8 @@ def create_ui():
                         label="Select Noise Filter",
                         value='original'
                     )
-                with gr.Row():
-                    gr.Label("Mesh models and noise methods interations are bit wreid right now and often results in bugs. Revisiting the code to fix this issue on Wednesday.")
+                # with gr.Row():
+                #     gr.Label("Mesh models and noise methods interations are bit wreid right now and often results in bugs. Revisiting the code to fix this issue on Wednesday.")
                 with gr.Row():
                     process_btn_model = gr.Button("Process Video", variant="primary")
                     status_model = gr.Textbox(label="Status", interactive=False)
@@ -298,14 +298,16 @@ def create_ui():
                     # Process the video
                     
                     output_paths = {}
-                    # if model_noise_radio == 'original':
-                        # for model in selected_models:
-                            # output_paths = process_video(video_path, selected_models)
-                    # else:
-                        # model_output_paths = process_video(video_path, selected_models)
-                        # for model in selected_models:
-                            # output_paths[model] = apply_method(model_output_paths[model], [model_noise_radio])[model_noise_radio]
-                    output_paths = process_video(video_path, selected_models) # TEMPORARY
+                    if model_noise_radio == 'original':
+                        for model in selected_models:
+                            output_paths = process_video(video_path, selected_models)
+                    else:
+                        output_paths = process_video(video_path, selected_models,model_noise_radio)
+                        #mediapipe uses the apply_method method
+
+                        if 'mediapipe' in selected_models:
+                            output_paths['mediapipe'] = apply_method(output_paths['mediapipe'], [model_noise_radio])[model_noise_radio]
+                    # output_paths = process_video(video_path, selected_models) # TEMPORARY
                     if output_paths is None:
                         for comp in model_components.values():
                             updates[comp] = gr.Video(value=None)
