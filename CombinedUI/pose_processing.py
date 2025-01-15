@@ -8,7 +8,8 @@ from pykrige.ok import OrdinaryKriging
 from mediapipe.framework.formats import landmark_pb2
 import subprocess
 import os
-
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 class PoseProcessor:
     def __init__(self):
         self.mp_pose = mp.solutions.pose
@@ -58,7 +59,7 @@ class PoseProcessor:
                     landmarks.append([landmark.x, landmark.y, landmark.z, landmark.visibility])
                 all_landmarks.append(landmarks)
             else:
-                all_landmarks.append(None)
+                all_landmarks.append([])
 
         print(f"\nMediaPipe detection completed, processed {frame_count} frames")
         
@@ -84,13 +85,15 @@ class PoseProcessor:
                     landmark.y = float(landmark_data[1])
                     landmark.z = float(landmark_data[2])
                     landmark.visibility = float(landmark_data[3])
-                
-                self.mp_drawing.draw_landmarks(
-                    frame,
-                    landmark_list,
-                    self.mp_pose.POSE_CONNECTIONS,
-                    landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style()
-                )
+                try:
+                    self.mp_drawing.draw_landmarks(
+                        frame,
+                        landmark_list,
+                        self.mp_pose.POSE_CONNECTIONS,
+                        landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style()
+                    )
+                except Exception as e:
+                    logging.error(f"Error drawing landmarks: {e}", exc_info=True)
             out.write(frame)
 
         cap.release()

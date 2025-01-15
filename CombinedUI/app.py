@@ -31,7 +31,7 @@ def verify_output(path):
     logger.info(f"Verifying path {path}: {'exists' if exists else 'does not exist'}")
     return exists
 
-def process_video(video_path, selected_models, noise_filter = 'None'):
+def process_video(video_path, selected_models, noise_filter = 'Original'):
     try:
         output_paths = {}
         video_dir = os.path.dirname(video_path)
@@ -42,8 +42,8 @@ def process_video(video_path, selected_models, noise_filter = 'None'):
                 case "mediapipe":
                     processor = PoseProcessor()
                     #use mediapipe without additional methods
-                    output_path = f'./output_original.mp4'
-                    processor.process_video(video_path, method='original')
+                    output_path = f'./output_{noise_filter}.mp4'
+                    processor.process_video(video_path, method=noise_filter)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
                 case "fourdhumans":
@@ -303,10 +303,7 @@ def create_ui():
                             output_paths = process_video(video_path, selected_models)
                     else:
                         output_paths = process_video(video_path, selected_models,model_noise_radio)
-                        #mediapipe uses the apply_method method
-
-                        if 'mediapipe' in selected_models:
-                            output_paths['mediapipe'] = apply_method(output_paths['mediapipe'], [model_noise_radio])[model_noise_radio]
+                        
                     # output_paths = process_video(video_path, selected_models) # TEMPORARY
                     if output_paths is None:
                         for comp in model_components.values():
