@@ -39,7 +39,7 @@ class PoseProcessor:
         all_landmarks = []
         frames = []
         frame_count = 0
-        max_frames = 300  # Limit processing to 100 frames
+        max_frames = 1000  # Limit processing to 1000 frames
 
         # First read all frames and landmarks
         while cap.isOpened() and frame_count < max_frames:
