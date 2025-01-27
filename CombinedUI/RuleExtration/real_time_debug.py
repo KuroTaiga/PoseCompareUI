@@ -8,10 +8,12 @@ from tqdm import tqdm
 import mediapipe as mp
 import signal
 import subprocess
-
+from .src.feature_extraction import generate_joint_features
+from .src.equipment_detection import detect_equipment_via_script
 # 修改路径设置
-BASE_PATH = '/home/bizon/xiang/new_computer'  # 新的基础路径
+BASE_PATH = os.getcwd()  # 新的基础路径
 SRC_PATH = os.path.join(BASE_PATH, 'src')
+print(SRC_PATH)
 VIDEO_PATH = os.path.join(BASE_PATH, 'origin_test_video')
 YOLO_PATH = os.path.join(BASE_PATH, 'yolov7')
 YOLO_SCRIPT = os.path.join(YOLO_PATH, 'detect_revise.py')
@@ -19,38 +21,38 @@ YOLO_WEIGHTS = os.path.join(BASE_PATH, 'best.pt')
 EXERCISE_JSON = os.path.join(BASE_PATH, 'exercise_generate_最新.json')
 GENERATE_VIDEO_PATH = os.path.join(BASE_PATH, 'generate_video')
 
-def verify_and_import():
-    """验证所需路径和导入必要模块"""
-    required_paths = {
-        'Base Path': BASE_PATH,
-        'Source Path': SRC_PATH,
-        'Video Path': VIDEO_PATH,
-        'YOLO Script': YOLO_SCRIPT,
-        'YOLO Weights': YOLO_WEIGHTS,
-        'Exercise JSON': EXERCISE_JSON,
-        'Generate Video Path': GENERATE_VIDEO_PATH
-    }
+# def verify_and_import():
+#     """验证所需路径和导入必要模块"""
+#     required_paths = {
+#         'Base Path': BASE_PATH,
+#         'Source Path': SRC_PATH,
+#         'Video Path': VIDEO_PATH,
+#         'YOLO Script': YOLO_SCRIPT,
+#         'YOLO Weights': YOLO_WEIGHTS,
+#         'Exercise JSON': EXERCISE_JSON,
+#         'Generate Video Path': GENERATE_VIDEO_PATH
+#     }
 
-    for name, path in required_paths.items():
-        if not os.path.exists(path):
-            if name == 'Generate Video Path':
-                print(f"创建输出视频目录: {path}")
-                os.makedirs(path)
-            else:
-                raise Exception(f"Error: {name} not found at {path}")
+#     for name, path in required_paths.items():
+#         if not os.path.exists(path):
+#             if name == 'Generate Video Path':
+#                 print(f"创建输出视频目录: {path}")
+#                 os.makedirs(path)
+#             else:
+#                 raise Exception(f"Error: {name} not found at {path}")
 
-    if SRC_PATH not in sys.path:
-        sys.path.append(SRC_PATH)
+#     if SRC_PATH not in sys.path:
+#         sys.path.append(SRC_PATH)
 
-    try:
-        # 修改全局变量声明
-        global generate_joint_features, detect_equipment_via_script
-        from feature_extraction import generate_joint_features
-        from equipment_detection import detect_equipment_via_script  # 确保这行正确导入
-        print("Successfully imported required modules from src")
-    except ImportError as e:
-        print(f"Error importing modules: {str(e)}")
-        raise
+#     try:
+#         # 修改全局变量声明
+#         global generate_joint_features, detect_equipment_via_script
+#         from feature_extraction import generate_joint_features
+#         from equipment_detection import detect_equipment_via_script  # 确保这行正确导入
+#         print("Successfully imported required modules from src")
+#     except ImportError as e:
+#         print(f"Error importing modules: {str(e)}")
+#         raise
 
 def get_joint_positions_from_video(video_path):
     """使用与pose_processing.py相同的MediaPipe实现"""
@@ -161,67 +163,67 @@ def convert_features_to_text(features):
     
     return " ".join(text_parts)
 
-def collect_video_files():
-    """收集视频文件"""
-    if not os.path.exists(VIDEO_PATH):
-        raise Exception(f"Video directory not found: {VIDEO_PATH}")
+# def collect_video_files():
+#     """收集视频文件"""
+#     if not os.path.exists(VIDEO_PATH):
+#         raise Exception(f"Video directory not found: {VIDEO_PATH}")
 
-    exercise_rules = build_exercise_rules()
-    allowed_exercises = list(exercise_rules.keys())
+#     exercise_rules = build_exercise_rules()
+#     allowed_exercises = list(exercise_rules.keys())
 
-    video_files = []
-    exercise_names = []
+#     video_files = []
+#     exercise_names = []
 
-    for file in os.listdir(VIDEO_PATH):
-        if file.endswith(".mp4"):
-            matched_exercise = next(
-                (exercise for exercise in allowed_exercises
-                 if exercise.lower() in file.lower()),
-                None
-            )
+#     for file in os.listdir(VIDEO_PATH):
+#         if file.endswith(".mp4"):
+#             matched_exercise = next(
+#                 (exercise for exercise in allowed_exercises
+#                  if exercise.lower() in file.lower()),
+#                 None
+#             )
 
-            if matched_exercise:
-                video_path = os.path.join(VIDEO_PATH, file)
-                video_files.append(video_path)
-                exercise_names.append(matched_exercise)
+#             if matched_exercise:
+#                 video_path = os.path.join(VIDEO_PATH, file)
+#                 video_files.append(video_path)
+#                 exercise_names.append(matched_exercise)
 
-    return video_files, exercise_names
+#     return video_files, exercise_names
 
-def build_exercise_rules():
-    """读取运动规则JSON文件"""
-    try:
-        with open(EXERCISE_JSON, 'r', encoding='utf-8') as f:
-            return json.load(f, object_pairs_hook=OrderedDict)
-    except Exception as e:
-        print(f"Error loading exercise.json: {e}")
-        return OrderedDict()
+# def build_exercise_rules():
+#     """读取运动规则JSON文件"""
+#     try:
+#         with open(EXERCISE_JSON, 'r', encoding='utf-8') as f:
+#             return json.load(f, object_pairs_hook=OrderedDict)
+#     except Exception as e:
+#         print(f"Error loading exercise.json: {e}")
+#         return OrderedDict()
 
-def calculate_custom_similarity(video_vector, exercise_vectors, video_features, exercise_rules):
-    """计算自定义相似度"""
-    base_similarities = cosine_similarity(video_vector, exercise_vectors)[0]
-    adjusted_similarities = base_similarities.copy()
+# def calculate_custom_similarity(video_vector, exercise_vectors, video_features, exercise_rules):
+#     """计算自定义相似度"""
+#     base_similarities = cosine_similarity(video_vector, exercise_vectors)[0]
+#     adjusted_similarities = base_similarities.copy()
 
-    for i, exercise in enumerate(exercise_rules):
-        rule = exercise_rules[exercise]
-        score = 1.0
+#     for i, exercise in enumerate(exercise_rules):
+#         rule = exercise_rules[exercise]
+#         score = 1.0
 
-        # 检查关键特征匹配
-        for key_feature in ["movement.primary", "pose.torso", "pose.arms.shoulder_position"]:
-            if key_feature in rule and key_feature in video_features:
-                if rule[key_feature] == video_features[key_feature]:
-                    score *= 1.2
-                else:
-                    score *= 0.8
+#         # 检查关键特征匹配
+#         for key_feature in ["movement.primary", "pose.torso", "pose.arms.shoulder_position"]:
+#             if key_feature in rule and key_feature in video_features:
+#                 if rule[key_feature] == video_features[key_feature]:
+#                     score *= 1.2
+#                 else:
+#                     score *= 0.8
 
-        # 检查设备匹配
-        if rule.get("equipment", "") == video_features.get("equipment", ""):
-            score *= 1.5
-        else:
-            score *= 0.5
+#         # 检查设备匹配
+#         if rule.get("equipment", "") == video_features.get("equipment", ""):
+#             score *= 1.5
+#         else:
+#             score *= 0.5
 
-        adjusted_similarities[i] *= score
+#         adjusted_similarities[i] *= score
 
-    return adjusted_similarities
+#     return adjusted_similarities
 
 def apply_butterworth_filter(joint_positions_sequence, fps):
     try:
@@ -287,16 +289,17 @@ def apply_butterworth_filter(joint_positions_sequence, fps):
         print(f"滤波处理出错，使用原始数据: {str(e)}")
         return joint_positions_sequence
 
-def process_video_direct(video_name):
+def process_video_direct(video_path):
     try:
-        print(f"\n开始处理视频: {video_name}")
+        print(f"\n开始处理视频: {video_path}")
         
         # 设置路径
-        input_video_path = os.path.join(VIDEO_PATH, video_name)
-        base_name = os.path.splitext(video_name)[0]
-        filtered_path = os.path.join(GENERATE_VIDEO_PATH, f"{base_name}_filtered.mp4")
-        features_path = os.path.join(GENERATE_VIDEO_PATH, f"{base_name}_features.mp4")
-
+        input_video_path = video_path
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        # filtered_path = os.path.join(GENERATE_VIDEO_PATH, f"{base_name}_filtered.mp4")
+        # features_path = os.path.join(GENERATE_VIDEO_PATH, f"{base_name}_features.mp4")
+        filtered_path = f"./{base_name}_filtered.mp4"
+        features_path = f"./{base_name}_features.mp4"
         # 检测器材
         detected_equipment = detect_equipment_via_script(
             YOLO_SCRIPT,
@@ -406,13 +409,13 @@ def process_video_direct(video_name):
 
                     # 在图像上显示角度（使用绿色，更容易看清）
                     cv2.putText(filtered_frame, f"L Arm: {left_arm_angle:.1f}", 
-                              (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)  # 绿色
+                              (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
                     cv2.putText(filtered_frame, f"R Arm: {right_arm_angle:.1f}", 
-                              (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)  # 绿色
+                              (10, 170), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
                     cv2.putText(filtered_frame, f"L Leg: {left_leg_angle:.1f}", 
-                              (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)  # 绿色
+                              (10, 260), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
                     cv2.putText(filtered_frame, f"R Leg: {right_leg_angle:.1f}", 
-                              (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)  # 绿色
+                              (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
 
                     # 收集关节位置
                     positions = {}
@@ -454,14 +457,14 @@ def process_video_direct(video_name):
         feature_frame = np.zeros((height, width, 3), dtype=np.uint8)
         
         if filtered_features:
-            y_offset = 30
-            line_height = 25
+            y_offset = 250
+            line_height = 75
             
             # 显示设备
             if 'equipment' in filtered_features:
                 cv2.putText(feature_frame, f"Equipment: {filtered_features['equipment']}", 
                           (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
-                          0.6, (255, 255, 255), 1)
+                          1.8, (255, 255, 255), 3)
                 y_offset += line_height
 
             # 显示各部位的运动状态
@@ -469,7 +472,7 @@ def process_video_direct(video_name):
                 if part in filtered_features:
                     cv2.putText(feature_frame, f"{part.upper()}: {filtered_features[part]}", 
                               (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
-                              0.6, (255, 255, 255), 1)
+                              1.8, (255, 255, 255), 3)
                     y_offset += line_height
 
         # 将相同的特征帧写入整个视频
@@ -492,7 +495,7 @@ def process_video_direct(video_name):
         return [filtered_path, features_path]
 
     except Exception as e:
-        print(f"\n处理 {video_name} 时出错: {str(e)}")
+        print(f"\n处理 {video_path} 时出错: {str(e)}")
         import traceback
         print(traceback.format_exc())
         return None
@@ -516,7 +519,7 @@ def filter_features(features):
     
     return filtered
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     try:
         print("Starting program...")
         verify_and_import()

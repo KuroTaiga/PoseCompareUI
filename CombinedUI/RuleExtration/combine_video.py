@@ -192,7 +192,7 @@ def process_all_videos(video_dir, generate_dir, output_base_dir):
 
 if __name__ == "__main__":
     # 更新基础路径为新电脑的路径
-    BASE_PATH = '/home/bizon/xiang/new_computer'
+    BASE_PATH = os.getcwd()
     VIDEO_PATH = os.path.join(BASE_PATH, 'origin_test_video')
     GENERATE_VIDEO_PATH = os.path.join(BASE_PATH, 'generate_video')
     COMBINED_VIDEO_PATH = os.path.join(BASE_PATH, 'combined_video')
