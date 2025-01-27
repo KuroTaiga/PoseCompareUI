@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 from pose_processing import PoseProcessor
 from pose_models import FourDHumanWrapper
+from RuleExtraation import real_time_debug
+
 # Setup logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -204,7 +206,17 @@ def create_ui():
                                     # visible=False
                                 )
                                 count+=1
-
+                with gr.Tab("Rule Extraction"):
+                    with gr.Row():
+                        rule_extraction_btn = gr.Button("Extract Rules", variant="primary")
+                        status_rule_extraction = gr.Textbox(label="Status", interactive=False)
+                    with gr.Row():
+                        rule_extraction_output = gr.Video(
+                            interactive=False,
+                            width = 1200,
+                            height= 300
+                        )
+            
             def layout_videos_interp(selected_methods):
                 updates = {}
                 # Calculate rows for 4 videos per row
@@ -381,6 +393,25 @@ def create_ui():
                         if noise_radio else "Please select a Noise Filter first"
                     )
                 }
+            
+            def process_videos_ruleExtraction(video_path):
+                updates = {}
+                if video_path is None:
+                    updates[status_rule_extraction] = gr.Textbox(value="Please select a video")
+                    updates[rule_extraction_output] = gr.Textbox(value="No video selected")
+                    return updates
+                try:
+                    # Process the video
+                    output = real_time_debug.process_video_direct(video_path)
+                    updates[status_rule_extraction] = gr.Textbox(value="Processing complete!")
+                    updates[rule_extraction_output] = gr.Textbox(value=output)
+                    return updates
+                except Exception as e:
+                    logger.error(f"Error in process_videos: {str(e)}")
+                    updates[status_rule_extraction] = gr.Textbox(value=f"Error: {str(e)}")
+                    updates[rule_extraction_output] = gr.Textbox(value="Error processing video")
+                    return updates
+            
             # Connect components
             input_video.change(
                 fn=update_video_status,
@@ -417,6 +448,12 @@ def create_ui():
                 fn=process_videos_interp,
                 inputs=[input_video, interpolation_checkbox],
                 outputs=list(video_components_interp.values()) + [status_interpolation]
+            )
+            
+            rule_extraction_btn.click(
+                fn=process_videos_ruleExtraction,
+                inputs=[input_video],
+                outputs=[status_rule_extraction, rule_extraction_output]
             )
             
         return app
