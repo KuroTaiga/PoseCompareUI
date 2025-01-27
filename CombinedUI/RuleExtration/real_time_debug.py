@@ -409,13 +409,13 @@ def process_video_direct(video_path):
 
                     # 在图像上显示角度（使用绿色，更容易看清）
                     cv2.putText(filtered_frame, f"L Arm: {left_arm_angle:.1f}", 
-                              (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
+                              (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
                     cv2.putText(filtered_frame, f"R Arm: {right_arm_angle:.1f}", 
-                              (10, 170), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
+                              (10, 180), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
                     cv2.putText(filtered_frame, f"L Leg: {left_leg_angle:.1f}", 
-                              (10, 260), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
+                              (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
                     cv2.putText(filtered_frame, f"R Leg: {right_leg_angle:.1f}", 
-                              (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
+                              (10, 360), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 3)  # 绿色
 
                     # 收集关节位置
                     positions = {}
@@ -457,14 +457,14 @@ def process_video_direct(video_path):
         feature_frame = np.zeros((height, width, 3), dtype=np.uint8)
         
         if filtered_features:
-            y_offset = 250
-            line_height = 75
+            y_offset = 750
+            line_height = 90
             
             # 显示设备
             if 'equipment' in filtered_features:
                 cv2.putText(feature_frame, f"Equipment: {filtered_features['equipment']}", 
                           (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
-                          1.8, (255, 255, 255), 3)
+                          3, (255, 255, 255), 3)
                 y_offset += line_height
 
             # 显示各部位的运动状态
@@ -472,7 +472,7 @@ def process_video_direct(video_path):
                 if part in filtered_features:
                     cv2.putText(feature_frame, f"{part.upper()}: {filtered_features[part]}", 
                               (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
-                              1.8, (255, 255, 255), 3)
+                              3, (255, 255, 255), 3)
                     y_offset += line_height
 
         # 将相同的特征帧写入整个视频
