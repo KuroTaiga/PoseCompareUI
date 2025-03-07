@@ -1,18 +1,19 @@
 import cv2
 import os
 import sys
+import shutil
 import torch
 from multiprocessing import cpu_count, Pool, Process
 from typing import List, Optional, Sequence, Union
 import torch.nn as nn
 import glob
 import torch.nn.functional as F
-import tqdm
+from tqdm import tqdm
 import numpy as np
 import json
 from worker_pool import WorkerPool
 from sapiens_classes_and_consts import COCO_KPTS_COLORS, COCO_SKELETON_INFO
-from sapiens_util import udp_decode
+from sapiens_util import udp_decode, nms, top_down_affine_transform
 class AdhocImageDataset(torch.utils.data.Dataset):
     def __init__(self, image_list, shape=None, mean=None, std=None):
         self.image_list = image_list
@@ -48,23 +49,30 @@ class AdhocImageDataset(torch.utils.data.Dataset):
         return orig_img_dir, orig_img, img
 
 class SapiensProcessor():
-    def __init__(self,checkpoint,device = "cuda:0",batch_size = 8,heatmap_scale = 4,shape = [1024,768],output_folder = "sapiens_output"):
-        self.estimator = torch.jit.load(checkpoint)
+    def __init__(self,checkpoint,device = "cuda:0",batch_size = 8,heatmap_scale = 4,shape = [1024,768],output_folder = "sapiens_output",save_img_flag = True):
+        self.save_flag = save_img_flag
+        self.checkpoint = checkpoint
+        self.device = device
         self.dtype = torch.float32  # TorchScript models use float32
-        self.estimator = self.estimator.to(device)
         self.batch_size = batch_size
         self.heatmap_scale = heatmap_scale
         self.shape = shape
         self.output_root = output_folder
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
         pass
 
-    def process_video(self, input_path,output_path,method = "original", output_format="mp4",kpt_thr = 0.3,radius = 6,thickness = 3):
+    def process_video(self, input_path, output_path, method = "original", output_format="mp4",kpt_thr = 0.3,radius = 6,thickness = 3):
         scale = self.heatmap_scale
-        
+        estimator = torch.jit.load(self.checkpoint)
+        estimator = estimator.to(self.device)
         input_shape = (3,)+tuple(self.shape)
         image_names = []
         imgs_path = self.vid_to_img(input_path)
+        # imgs_path = self.vid_to_img(os.path.join("inputs",os.path.basename(input_path))) #if we want to save not to temp
         out_img_folder = os.path.join(self.output_root, os.path.basename(imgs_path))
+        if not os.path.exists(out_img_folder):
+            os.makedirs(out_img_folder)
         if os.path.isdir(imgs_path):
             input_dir = imgs_path
             image_names = [
@@ -134,7 +142,7 @@ class SapiensProcessor():
                 valid_len = len(imgs)
                 imgs = F.pad(imgs, (0, 0, 0, 0, 0, 0, 0, self.batch_size - imgs.shape[0]), value=0)
                 pose_results.extend(
-                    self.batch_inference_topdown(self.estimator, imgs, dtype=self.dtype)[:valid_len]
+                    self.batch_inference_topdown(estimator, imgs, dtype=self.dtype)[:valid_len]
                 )
 
             batched_results = []
@@ -176,7 +184,8 @@ class SapiensProcessor():
         img_save_pool.finish()
         print("writting video")
         self.img_to_vid(out_img_folder,output_path)
-
+        if not self.save_flag: 
+            shutil.rmtree(out_img_folder)
     def batch_inference_topdown(self,model: nn.Module,imgs: List[Union[np.ndarray, str]],dtype=torch.bfloat16,flip=False,):
         with torch.no_grad(), torch.autocast(device_type="cuda", dtype=dtype):
             heatmaps = model(imgs.cuda())
@@ -186,9 +195,7 @@ class SapiensProcessor():
             imgs.cpu()
         return heatmaps.cpu()
 
-    def img_save_and_vis(
-        img, results, output_path, input_shape, heatmap_scale, kpt_colors, kpt_thr, radius, skeleton_info, thickness
-    ):
+    def img_save_and_vis(self,img, results, output_path, input_shape, heatmap_scale, kpt_colors, kpt_thr, radius, skeleton_info, thickness):
         # pred_instances_list = split_instances(result)
         heatmap = results["heatmaps"]
         centres = results["centres"]
@@ -280,7 +287,7 @@ class SapiensProcessor():
         centers = []
         scales = []
         for bbox in bboxes_list:
-            img, center, scale = self.top_down_affine_transform(orig_img.copy(), bbox)
+            img, center, scale = top_down_affine_transform(orig_img.copy(), bbox)
             img = cv2.resize(
                 img, (input_shape[1], input_shape[0]), interpolation=cv2.INTER_LINEAR
             ).transpose(2, 0, 1)
@@ -293,7 +300,7 @@ class SapiensProcessor():
             centers.extend(center)
             scales.extend(scale)
         return preprocessed_images, centers, scales
-    def vid_to_img(video_path):
+    def vid_to_img(self,video_path):
         if not os.path.exists(video_path):
             print(f"Error: The video file '{video_path}' does not exist.")
             return
@@ -324,7 +331,7 @@ class SapiensProcessor():
         # Release the video capture object
         cap.release()
         return output_dir
-    def img_to_vid(img_folder, output_path,fps=30):
+    def img_to_vid(self,img_folder, output_path,fps=30):
         images = sorted(glob.glob(os.path.join(img_folder, "*.jpg")))
         if not images:
             print(f"Error: No images found in '{img_folder}'.")

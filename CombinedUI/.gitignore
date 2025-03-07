@@ -4,3 +4,5 @@ mmcv
 ViTPose
 checkpoints
 pyopengl
+.pyc
+CombinedUI/demo_out

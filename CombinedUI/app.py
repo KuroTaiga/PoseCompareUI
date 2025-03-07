@@ -25,10 +25,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 #load models
 FDHuman_wrapper = FourDHumanWrapper()
-# sapiens_checkpoint_path = "./checkpoints/sapiens/sapiens_2b_coco_best_coco_AP_822_torchscript.pt2"
-sapiens_checkpoint_path = "/mnt/sda/dong"+"/sapiens_1b_coco_best_coco_AP_821_torchscript.pt2"
-Sapiens_processor = SapiensProcessor(sapiens_checkpoint_path)
-
+sapiens_checkpoint_path_2b = "/mnt/DATA/dong"+"/sapiens/sapiens_2b_coco_best_coco_AP_822_torchscript.pt2"
+sapiens_checkpoint_path_1b = "/mnt/DATA/dong"+"/sapiens_1b_coco_best_coco_AP_821_torchscript.pt2"
+sapiens_checkpoint_path_p6b = "/mnt/DATA/dong"+"/sapiens_1b_coco_best_coco_AP_821_torchscript.pt2"
+Sapiens_processor_2b = SapiensProcessor(sapiens_checkpoint_path_2b,save_img_flag=False)
+Sapiens_processor_1b = SapiensProcessor(sapiens_checkpoint_path_1b,save_img_flag=False)
+Sapiens_processor_p6b = SapiensProcessor(sapiens_checkpoint_path_p6b,save_img_flag=False)
 # Pose processing models:
 def verify_output(path):
     """Verify if output video exists"""
@@ -56,9 +58,19 @@ def process_video(video_path, selected_models, noise_filter = 'Original'):
                     FDHuman_wrapper.process_video(video_path, output_path,noise_filter)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
-                case "sapiens":
+                case "sapiens_0.6b":
                     output_path = f'./output_{model}.mp4'
-                    Sapiens_processor.process_video(video_path, output_path, noise_filter)
+                    Sapiens_processor_p6b.process_video(video_path, output_path, noise_filter)
+                    output_paths[model] = output_path
+                    logger.info(f"Expected output path: {output_path}")
+                case "sapiens_1b":
+                    output_path = f'./output_{model}.mp4'
+                    Sapiens_processor_1b.process_video(video_path, output_path, noise_filter)
+                    output_paths[model] = output_path
+                    logger.info(f"Expected output path: {output_path}")
+                case "sapiens_2b":
+                    output_path = f'./output_{model}.mp4'
+                    Sapiens_processor_2b.process_video(video_path, output_path, noise_filter)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
         return output_paths
@@ -105,7 +117,7 @@ def create_ui():
             
             # Define choices as a list of strings
             MODEL_CHOICES = [
-                'mediapipe', 'fourdhumans','sapiens'
+                'mediapipe', 'fourdhumans','sapiens_0.6b','sapiens_1b','sapiens_2b'
             ]
             INTERPOLATION_METHODS = [
                 'no interpolation', 'kalman', 'wiener',

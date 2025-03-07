@@ -2,4 +2,5 @@ CombinedUI/*.mp4
 CombinedUI/__pycache__/
 *.log
 *.pyc
-CombinedUI/RuleExtration/__pycache__/real_time_debug.cpython-310.pyc
+CombinedUI/RuleExtration/__pycache__/
+CombinedUI/demo_out
