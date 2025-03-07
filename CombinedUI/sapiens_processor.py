@@ -14,6 +14,7 @@ import json
 from worker_pool import WorkerPool
 from sapiens_classes_and_consts import COCO_KPTS_COLORS, COCO_SKELETON_INFO
 from sapiens_util import udp_decode, nms, top_down_affine_transform
+from scipy.signal import butter,filtfilt
 class AdhocImageDataset(torch.utils.data.Dataset):
     def __init__(self, image_list, shape=None, mean=None, std=None):
         self.image_list = image_list
@@ -62,11 +63,75 @@ class SapiensProcessor():
             os.makedirs(output_folder)
         pass
 
+    def _save_original_video_size(self, video_path):
+        """
+        Saves the original width and height of the input video.
+        """
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"Error: Could not open video {video_path}")
+            return
+        
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        self.original_width = width
+        self.original_height = height
+
+
+    def _resize_video(self, input_path, output_path, target_size=(1024, 768)):
+        """
+        Resizes the input video to the specified size while maintaining aspect ratio.
+        """
+        cap = cv2.VideoCapture(input_path)
+        if not cap.isOpened():
+            print(f"Error: Could not open video {input_path}")
+            return
+
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(output_path, fourcc, cap.get(cv2.CAP_PROP_FPS), target_size)
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Resize the frame
+            resized_frame = cv2.resize(frame, target_size, interpolation=cv2.INTER_LINEAR)
+            out.write(resized_frame)
+
+        cap.release()
+        out.release()
+        print(f"Resized video saved to {output_path}")
+
+    def _butterworth_filter(self,data, cutoff=3, fs=30, order=4):
+        """
+        Apply a Butterworth filter to smooth pose data.
+        Args:
+            data: np.array, input data (e.g., heatmaps or keypoints).
+            cutoff: float, cutoff frequency in Hz.
+            fs: int, sampling frequency (frames per second).
+            order: int, order of the filter.
+        Returns:
+            np.array, filtered data.
+        """
+        nyquist = 0.5 * fs
+        normal_cutoff = cutoff / nyquist
+        b, a = butter(order, normal_cutoff, btype='low', analog=False)
+        filtered_data = filtfilt(b, a, data, axis=0)
+        return filtered_data
+
     def process_video(self, input_path, output_path, method = "original", output_format="mp4",kpt_thr = 0.3,radius = 6,thickness = 3):
         scale = self.heatmap_scale
+        self._save_original_video_size(input_path)
+        resized_video_path = os.path.splitext(input_path)[0] + "_resized.mp4"
+        self._resize_video(input_path, resized_video_path)
+        input_path = resized_video_path  # Use resized video for processing
         estimator = torch.jit.load(self.checkpoint)
         estimator = estimator.to(self.device)
         input_shape = (3,)+tuple(self.shape)
+        # input_shape = (3,self.original_width,self.original_height)
         image_names = []
         imgs_path = self.vid_to_img(input_path)
         # imgs_path = self.vid_to_img(os.path.join("inputs",os.path.basename(input_path))) #if we want to save not to temp
@@ -141,9 +206,11 @@ class SapiensProcessor():
                 )
                 valid_len = len(imgs)
                 imgs = F.pad(imgs, (0, 0, 0, 0, 0, 0, 0, self.batch_size - imgs.shape[0]), value=0)
-                pose_results.extend(
-                    self.batch_inference_topdown(estimator, imgs, dtype=self.dtype)[:valid_len]
-                )
+                curr_results = self.batch_inference_topdown(estimator, imgs, dtype=self.dtype)[:valid_len]
+                if method == "butterworth":
+                    curr_results = [self._butterworth_filter(res.numpy()) for res in curr_results]
+                    curr_results = [torch.tensor(res.copy()) for res in curr_results]
+                pose_results.extend(curr_results)
 
             batched_results = []
             for _, bbox_len in img_bbox_map.items():
