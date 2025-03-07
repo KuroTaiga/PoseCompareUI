@@ -58,7 +58,7 @@ def process_video(video_path, selected_models, noise_filter = 'Original'):
                     logger.info(f"Expected output path: {output_path}")
                 case "sapiens":
                     output_path = f'./output_{model}.mp4'
-                    Sapiens_processor.process_video(video_path, output_path,noise_filter)
+                    Sapiens_processor.process_video(video_path, output_path, noise_filter)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
         return output_paths

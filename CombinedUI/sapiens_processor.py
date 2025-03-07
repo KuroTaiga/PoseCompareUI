@@ -5,6 +5,8 @@ import torch
 from multiprocessing import cpu_count, Pool, Process
 from typing import List, Optional, Sequence, Union
 import torch.nn as nn
+import glob
+import torch.nn.functional as F
 import tqdm
 import numpy as np
 import json
@@ -46,19 +48,23 @@ class AdhocImageDataset(torch.utils.data.Dataset):
         return orig_img_dir, orig_img, img
 
 class SapiensProcessor():
-    def __init__(self,checkpoint,device = "cuda:0",batch_size = 8,heatmap_scale = 4,shape = [1024,768]):
+    def __init__(self,checkpoint,device = "cuda:0",batch_size = 8,heatmap_scale = 4,shape = [1024,768],output_folder = "sapiens_output"):
         self.estimator = torch.jit.load(checkpoint)
         self.dtype = torch.float32  # TorchScript models use float32
         self.estimator = self.estimator.to(device)
         self.batch_size = batch_size
         self.heatmap_scale = heatmap_scale
         self.shape = shape
+        self.output_root = output_folder
         pass
 
-    def process_video(self, input_path,output_path,method = "original", output_format="mp4"):
+    def process_video(self, input_path,output_path,method = "original", output_format="mp4",kpt_thr = 0.3,radius = 6,thickness = 3):
+        scale = self.heatmap_scale
+        
         input_shape = (3,)+tuple(self.shape)
         image_names = []
         imgs_path = self.vid_to_img(input_path)
+        out_img_folder = os.path.join(self.output_root, os.path.basename(imgs_path))
         if os.path.isdir(imgs_path):
             input_dir = imgs_path
             image_names = [
@@ -110,13 +116,68 @@ class SapiensProcessor():
                 for i, bbox_list in zip(batch_orig_imgs.numpy(), bboxes_batch)
             ]
             pose_ops = pose_preprocess_pool.run(args_list)
+            pose_imgs, pose_img_centers, pose_img_scales = [], [], []
+            for op in pose_ops:
+                pose_imgs.extend(op[0])
+                pose_img_centers.extend(op[1])
+                pose_img_scales.extend(op[2])
 
-    def batch_inference_topdown(
-        model: nn.Module,
-        imgs: List[Union[np.ndarray, str]],
-        dtype=torch.bfloat16,
-        flip=False,
-    ):
+            n_pose_batches = (len(pose_imgs) + self.batch_size - 1) // self.batch_size
+
+            # use this to tell torch compiler the start of model invocation as in 'flip' mode the tensor output is overwritten
+            torch.compiler.cudagraph_mark_step_begin()  
+            pose_results = []
+            for i in range(n_pose_batches):
+                imgs = torch.stack(
+                    pose_imgs[i * self.batch_size : (i + 1) * self.batch_size], dim=0
+                )
+                valid_len = len(imgs)
+                imgs = F.pad(imgs, (0, 0, 0, 0, 0, 0, 0, self.batch_size - imgs.shape[0]), value=0)
+                pose_results.extend(
+                    self.batch_inference_topdown(self.estimator, imgs, dtype=self.dtype)[:valid_len]
+                )
+
+            batched_results = []
+            for _, bbox_len in img_bbox_map.items():
+                result = {
+                    "heatmaps": pose_results[:bbox_len].copy(),
+                    "centres": pose_img_centers[:bbox_len].copy(),
+                    "scales": pose_img_scales[:bbox_len].copy(),
+                }
+                batched_results.append(result)
+                del (
+                    pose_results[:bbox_len],
+                    pose_img_centers[:bbox_len],
+                    pose_img_scales[:bbox_len],
+                )
+
+            assert len(batched_results) == len(batch_orig_imgs)
+            args_list = [
+                (
+                    i.numpy(),
+                    r,
+                    os.path.join(out_img_folder, os.path.basename(img_name)),
+                    (input_shape[2], input_shape[1]),
+                    scale,
+                    KPTS_COLORS,
+                    kpt_thr,
+                    radius,
+                    SKELETON_INFO,
+                    thickness,
+                )
+                for i, r, img_name in zip(
+                    batch_orig_imgs[:valid_images_len],
+                    batched_results[:valid_images_len],
+                    batch_image_name,
+                )
+            ]
+            img_save_pool.run_async(args_list)
+        pose_preprocess_pool.finish()
+        img_save_pool.finish()
+        print("writting video")
+        self.img_to_vid(out_img_folder,output_path)
+
+    def batch_inference_topdown(self,model: nn.Module,imgs: List[Union[np.ndarray, str]],dtype=torch.bfloat16,flip=False,):
         with torch.no_grad(), torch.autocast(device_type="cuda", dtype=dtype):
             heatmaps = model(imgs.cuda())
             if flip:
@@ -263,3 +324,19 @@ class SapiensProcessor():
         # Release the video capture object
         cap.release()
         return output_dir
+    def img_to_vid(img_folder, output_path,fps=30):
+        images = sorted(glob.glob(os.path.join(img_folder, "*.jpg")))
+        if not images:
+            print(f"Error: No images found in '{img_folder}'.")
+            return
+        frame = cv2.imread(images[0])
+        height, width, _ = frame.shape
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        for image_path in images:
+            frame = cv2.imread(image_path)
+            out.write(frame)
+        out.release()
+        print(f"Video saved to {output_path}")
+
+
