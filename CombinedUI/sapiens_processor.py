@@ -207,9 +207,9 @@ class SapiensProcessor():
                 valid_len = len(imgs)
                 imgs = F.pad(imgs, (0, 0, 0, 0, 0, 0, 0, self.batch_size - imgs.shape[0]), value=0)
                 curr_results = self.batch_inference_topdown(estimator, imgs, dtype=self.dtype)[:valid_len]
-                if method == "butterworth":
-                    curr_results = [self._butterworth_filter(res.numpy()) for res in curr_results]
-                    curr_results = [torch.tensor(res.copy()) for res in curr_results]
+                # if method == "butterworth":
+                    # curr_results = [self._butterworth_filter(res.numpy()) for res in curr_results]
+                    # curr_results = [torch.tensor(res.copy()) for res in curr_results]
                 pose_results.extend(curr_results)
 
             batched_results = []

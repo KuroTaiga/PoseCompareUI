@@ -4,3 +4,4 @@ CombinedUI/__pycache__/
 *.pyc
 CombinedUI/RuleExtration/__pycache__/
 CombinedUI/demo_out
+CombinedUI/sapiens_output/
