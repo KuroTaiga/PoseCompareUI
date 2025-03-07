@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 from pose_processing import PoseProcessor
 from pose_models import FourDHumanWrapper
+from sapiens_processor import SapiensProcessor
 from RuleExtration import real_time_debug, combine_video
 
 # Setup logging
@@ -24,7 +25,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 #load models
 FDHuman_wrapper = FourDHumanWrapper()
-
+sapiens_checkpoint_path = "./checkpoints/sapiens/sapiens_2b_coco_best_coco_AP_822_torchscript.pt2"
+# sapiens_checkpoint_path = "./checkpoints/sapiens/sapiens_1b_coco_best_coco_AP_821_torchscript.pt2"
+Sapiens_processor = SapiensProcessor(sapiens_checkpoint_path)
 
 # Pose processing models:
 def verify_output(path):
@@ -51,6 +54,11 @@ def process_video(video_path, selected_models, noise_filter = 'Original'):
                 case "fourdhumans":
                     output_path = f'./output_{model}.mp4'
                     FDHuman_wrapper.process_video(video_path, output_path,noise_filter)
+                    output_paths[model] = output_path
+                    logger.info(f"Expected output path: {output_path}")
+                case "sapiens":
+                    output_path = f'./output_{model}.mp4'
+                    Sapiens_processor.process_video(video_path, output_path,noise_filter)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
         return output_paths
@@ -97,7 +105,7 @@ def create_ui():
             
             # Define choices as a list of strings
             MODEL_CHOICES = [
-                'mediapipe', 'fourdhumans'
+                'mediapipe', 'fourdhumans','sapiens'
             ]
             INTERPOLATION_METHODS = [
                 'no interpolation', 'kalman', 'wiener',
