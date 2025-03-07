@@ -12,7 +12,7 @@ import numpy as np
 import json
 from worker_pool import WorkerPool
 from sapiens_classes_and_consts import COCO_KPTS_COLORS, COCO_SKELETON_INFO
-from sapiens_utils import udp_decode
+from sapiens_util import udp_decode
 class AdhocImageDataset(torch.utils.data.Dataset):
     def __init__(self, image_list, shape=None, mean=None, std=None):
         self.image_list = image_list

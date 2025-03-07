@@ -25,8 +25,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 #load models
 FDHuman_wrapper = FourDHumanWrapper()
-sapiens_checkpoint_path = "./checkpoints/sapiens/sapiens_2b_coco_best_coco_AP_822_torchscript.pt2"
-# sapiens_checkpoint_path = "./checkpoints/sapiens/sapiens_1b_coco_best_coco_AP_821_torchscript.pt2"
+# sapiens_checkpoint_path = "./checkpoints/sapiens/sapiens_2b_coco_best_coco_AP_822_torchscript.pt2"
+sapiens_checkpoint_path = "/mnt/sda/dong"+"/sapiens_1b_coco_best_coco_AP_821_torchscript.pt2"
 Sapiens_processor = SapiensProcessor(sapiens_checkpoint_path)
 
 # Pose processing models:
