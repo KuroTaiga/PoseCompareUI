@@ -40,7 +40,7 @@ def verify_output(path):
     logger.info(f"Verifying path {path}: {'exists' if exists else 'does not exist'}")
     return exists
 
-def process_video(video_path, selected_models, noise_filter = 'Original'):
+def process_video(video_path, selected_models, noise_filter = 'Original', filter_window = 5):
     try:
         output_paths = {}
         video_dir = os.path.dirname(video_path)
@@ -57,27 +57,28 @@ def process_video(video_path, selected_models, noise_filter = 'Original'):
                     logger.info(f"Expected output path: {output_path}")
                 case "fourdhumans":
                     output_path = f'./output_{model}.mp4'
+                    #TODO: update the noise filter method, currently the bnuitterworth filter application might be not optional
                     FDHuman_wrapper.process_video(video_path, output_path,method =noise_filter)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
                 case "sapiens_0.3b":
                     output_path = f'./output_{model}.mp4'
-                    Sapiens_processor_p3b.process_video(video_path, output_path, method=noise_filter)
+                    Sapiens_processor_p3b.process_video(video_path, output_path, method=noise_filter,filter_window=filter_window)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
                 case "sapiens_0.6b":
                     output_path = f'./output_{model}.mp4'
-                    Sapiens_processor_p6b.process_video(video_path, output_path, method=noise_filter)
+                    Sapiens_processor_p6b.process_video(video_path, output_path, method=noise_filter,filter_window=filter_window)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
                 case "sapiens_1b":
                     output_path = f'./output_{model}.mp4'
-                    Sapiens_processor_1b.process_video(video_path, output_path, method =noise_filter)
+                    Sapiens_processor_1b.process_video(video_path, output_path, method =noise_filter,filter_window=filter_window)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
                 case "sapiens_2b":
                     output_path = f'./output_{model}.mp4'
-                    Sapiens_processor_2b.process_video(video_path, output_path, method = noise_filter)
+                    Sapiens_processor_2b.process_video(video_path, output_path, method = noise_filter,filter_window=filter_window)
                     output_paths[model] = output_path
                     logger.info(f"Expected output path: {output_path}")
         return output_paths
@@ -89,7 +90,7 @@ def process_video(video_path, selected_models, noise_filter = 'Original'):
 
     
 
-def apply_method(video_path, selected_methods):    
+def apply_method(video_path, selected_methods,filter_window=5):    
     try:
         processor = PoseProcessor()
         output_paths = {}
@@ -101,6 +102,7 @@ def apply_method(video_path, selected_methods):
             processing_method = 'original' if method == 'no interpolation' else method
             logger.info(f"Processing method {processing_method}")
             output_path = f'./output_{processing_method}.mp4'
+            #TODO udpate the process video function so that it has the abilitity to apply different window size
             processor.process_video(video_path, method=processing_method)
             output_paths[method] = output_path
             logger.info(f"Expected output path: {output_path}")
@@ -156,6 +158,14 @@ def create_ui():
                         label="Select Noise Filter",
                         value='original'
                     )
+                with gr.Row():
+                    filter_window = gr.Slider(
+                        label="Filter Window Size",
+                        min_value=1,
+                        max_value=10,
+                        step=1,
+                        value=5
+                    )
                 # with gr.Row():
                 #     gr.Label("Mesh models and noise methods interations are bit wreid right now and often results in bugs. Revisiting the code to fix this issue on Wednesday.")
                 with gr.Row():
@@ -193,6 +203,14 @@ def create_ui():
                                 width = 400,
                                 height=300
                             )
+                with gr.Row():
+                    noise_window = gr.Slider(
+                        label="Noise Window Size",
+                        min_value=1,
+                        max_value=10,
+                        step=1,
+                        value=5
+                    )
                     
             with gr.Tab("Interpolation"):
                 # Interpolation method selection
@@ -321,7 +339,7 @@ def create_ui():
                     updates[status_interpolation] = gr.Textbox(value=f"Error: {str(e)}")
                     return updates
             
-            def process_videos_model(video_path, selected_models, model_noise_radio):
+            def process_videos_model(video_path, selected_models, model_noise_radio, filter_window):
                 updates = {}
                 if not selected_models:
                     for comp in model_components.values():
@@ -341,7 +359,7 @@ def create_ui():
                         for model in selected_models:
                             output_paths = process_video(video_path, selected_models)
                     else:
-                        output_paths = process_video(video_path, selected_models,model_noise_radio)
+                        output_paths = process_video(video_path, selected_models,model_noise_radio, filter_window)
                         
                     # output_paths = process_video(video_path, selected_models) # TEMPORARY
                     if output_paths is None:
@@ -365,7 +383,7 @@ def create_ui():
                     return updates
 
 
-            def process_videos_noise(video_path, selected_methods):
+            def process_videos_noise(video_path, selected_methods,noise_window=5):
                 updates = {}
                 
                 if not selected_methods:
@@ -382,7 +400,7 @@ def create_ui():
                 
                 try:
                     # Process the video
-                    output_paths = apply_method(video_path, selected_methods)
+                    output_paths = apply_method(video_path, selected_methods,filter_window=noise_window)
                     
                     if output_paths is None:
                         for comp in noise_components.values():
@@ -464,13 +482,13 @@ def create_ui():
             # Handle video processing
             process_btn_model.click(
                 fn=process_videos_model,
-                inputs=[input_video, model_checkbox, model_noise_radio],
+                inputs=[input_video, model_checkbox, model_noise_radio, filter_window],
                 outputs=list(model_components.values()) + [status_model]
             )
 
             process_btn_noise.click(
                 fn=process_videos_noise,
-                inputs=[input_video, noise_checkbox],
+                inputs=[input_video, noise_checkbox, noise_window],
                 outputs=list(noise_components.values()) + [status_noise]
             )
 

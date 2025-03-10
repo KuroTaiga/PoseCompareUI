@@ -122,7 +122,7 @@ class SapiensProcessor():
         filtered_data = filtfilt(b, a, data, axis=0)
         return filtered_data
 
-    def process_video(self, input_path, output_path, method = "original", output_format="mp4",kpt_thr = 0.3,radius = 6,thickness = 3):
+    def process_video(self, input_path, output_path, method = "original", filter_window = 5, output_format="mp4",kpt_thr = 0.3,radius = 6,thickness = 3):
         scale = self.heatmap_scale
         self._save_original_video_size(input_path)
         resized_video_path = os.path.splitext(input_path)[0] + "_resized.mp4"
