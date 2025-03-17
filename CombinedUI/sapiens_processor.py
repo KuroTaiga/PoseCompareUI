@@ -50,12 +50,14 @@ class AdhocImageDataset(torch.utils.data.Dataset):
         return orig_img_dir, orig_img, img
 
 class SapiensProcessor():
-    def __init__(self,checkpoint,device = "cuda:0",batch_size = 8,heatmap_scale = 4,shape = [1024,768],output_folder = "sapiens_output",save_img_flag = True):
+    def __init__(self,checkpoint,device = "cuda:0",batch_size = 8,window_size = 5,heatmap_scale = 4,shape = [1024,768],output_folder = "sapiens_output",save_img_flag = True):
         self.save_flag = save_img_flag
         self.checkpoint = checkpoint
         self.device = device
         self.dtype = torch.float32  # TorchScript models use float32
         self.batch_size = batch_size
+        self.window_size = window_size
+        self.pose_buffer = []
         self.heatmap_scale = heatmap_scale
         self.shape = shape
         self.output_root = output_folder
@@ -121,9 +123,35 @@ class SapiensProcessor():
         b, a = butter(order, normal_cutoff, btype='low', analog=False)
         filtered_data = filtfilt(b, a, data, axis=0)
         return filtered_data
+    
+    def _apply_butterworth_filter(self, keypoints_batch):
+        filtered_batch = []
+        for keypoints in keypoints_batch:
+            self.pose_buffer.append(keypoints)
+            if len(self.pose_buffer) > self.window_size:
+                self.pose_buffer.pop(0)  # Keep buffer size fixed
 
-    def process_video(self, input_path, output_path, method = "original", filter_window = 5, output_format="mp4",kpt_thr = 0.3,radius = 6,thickness = 3):
+            if len(self.pose_buffer) < self.window_size:
+                filtered_batch.append(keypoints)  # Not enough frames to filter
+                continue
+
+            buffer_array = np.array(self.pose_buffer)  # Shape: (window_size, batch_size, 17, 2)
+            filtered_keypoints_batch = np.zeros_like(keypoints)
+            
+            for joint_idx in range(17):  # Iterate over joints
+                for coord_idx in range(2):  # x and y coordinates
+                    filtered_keypoints_batch[:, joint_idx, coord_idx] = self._butterworth_filter(
+                        buffer_array[:, :, joint_idx, coord_idx]
+                    )[-keypoints.shape[0]:]  # Use last filtered values for the batch
+            
+            filtered_batch.append(filtered_keypoints_batch)
+        
+        return np.array(filtered_batch)
+
+    def process_video(self, input_path, output_path, method = "original",filter_window = 5, output_format="mp4",kpt_thr = 0.3,radius = 6,thickness = 3):
         scale = self.heatmap_scale
+        self.filter_window = filter_window
+        self.pose_buffer = [] # Reset pose buffer
         self._save_original_video_size(input_path)
         resized_video_path = os.path.splitext(input_path)[0] + "_resized.mp4"
         self._resize_video(input_path, resized_video_path)
@@ -207,9 +235,8 @@ class SapiensProcessor():
                 valid_len = len(imgs)
                 imgs = F.pad(imgs, (0, 0, 0, 0, 0, 0, 0, self.batch_size - imgs.shape[0]), value=0)
                 curr_results = self.batch_inference_topdown(estimator, imgs, dtype=self.dtype)[:valid_len]
-                # if method == "butterworth":
-                    # curr_results = [self._butterworth_filter(res.numpy()) for res in curr_results]
-                    # curr_results = [torch.tensor(res.copy()) for res in curr_results]
+                if method == "butterworth":
+                    curr_results = self._apply_butterworth_filter(curr_results)
                 pose_results.extend(curr_results)
 
             batched_results = []

@@ -261,7 +261,10 @@ def create_ui():
                         width = 1800,
                         height= 600
                     )
-            
+            with gr.Tab("Heatmap"):
+                #TODO: add heatmap tab
+                pass
+
             def layout_videos_interp(selected_methods):
                 updates = {}
                 # Calculate rows for 4 videos per row
